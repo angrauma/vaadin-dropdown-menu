@@ -321,7 +321,9 @@ This program is available under Apache License Version 2.0, available at https:/
 
             _toggleElement: Object,
 
-            _items: Object
+            _items: Object,
+
+            _customTextFieldOption: Object
           };
         }
 
@@ -366,6 +368,7 @@ This program is available under Apache License Version 2.0, available at https:/
             if (this._menuElement) {
               this._menuElement.addEventListener('items-changed', e => {
                 this._items = this._menuElement.items;
+                this._customTextFieldOption = Array.from(this._menuElement.children).filter(child => child.localName === 'vaadin-text-field')[0];
               });
             }
           }
@@ -425,6 +428,13 @@ This program is available under Apache License Version 2.0, available at https:/
           }
         }
 
+        _textFieldKeyDown(e) {
+          e.stopPropagation();
+          if (/^(Escape|Enter)$/.test(e.key)) {
+            this._updateValueSlot(true);
+          }
+        }
+
         _openedChanged(opened, wasOpened) {
           if (
             !this._overlayElement ||
@@ -442,8 +452,13 @@ This program is available under Apache License Version 2.0, available at https:/
             this._openedWithFocusRing = this.hasAttribute('focus-ring') || this.focusElement.hasAttribute('focus-ring');
             this._menuElement.addEventListener('selected-changed', () => this._updateValueSlot());
             this._menuElement.addEventListener('keydown', e => this._onKeyDownInside(e));
-            this._menuElement.addEventListener('click', e => this.opened = false);
+            this._menuElement.addEventListener('click', e => this.opened = e.composedPath().indexOf(this._customTextFieldOption) !== -1);
             this._menuElement.focus();
+
+            if (this._customTextFieldOption) {
+              this._customTextFieldOption.addEventListener('keydown', e => this._textFieldKeyDown(e));
+            }
+
             this._setPosition();
             window.addEventListener('scroll', this._boundSetPosition, true);
           } else if (wasOpened) {
@@ -480,16 +495,16 @@ This program is available under Apache License Version 2.0, available at https:/
           toggleElement && toggleElement.setAttribute('aria-expanded', opened);
         }
 
-        _updateValueSlot() {
+        _updateValueSlot(fromTextField = false) {
           this.opened = false;
           this._valueElement.innerHTML = '';
 
-          const selected = this._items[this._menuElement.selected];
+          const selected = (!fromTextField) ? this._items[this._menuElement.selected] : true;
           let hasContent;
           if (selected) {
             let labelItem;
-            if (selected.hasAttribute('label')) {
-              hasContent = selected.getAttribute('label');
+            if (fromTextField || selected.hasAttribute('label')) {
+              hasContent = (this._customTextFieldOption) ? this._customTextFieldOption.value : selected.getAttribute('label');
               labelItem = document.createElement('vaadin-item');
               labelItem.textContent = hasContent;
               labelItem.selected = true;
@@ -506,7 +521,7 @@ This program is available under Apache License Version 2.0, available at https:/
 
           if (!this._valueChanging) {
             this._selectedChanging = true;
-            this.value = selected && selected.value || '';
+            this.value = selected && (selected.value || hasContent) || '';
             delete this._selectedChanging;
           }
         }
